@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 
 
+#
+# KNOWN QUIRK:
+# - If a directory consists of a file named 01.jpg and 1.jpg,
+#   both will be ignored, and not renamed.
+#
+
+
 import os
 import re
 import itertools
@@ -148,6 +155,7 @@ def recur(path: str) -> None:
 
 def main() -> None:
     recur(TARGET)
+
     print("\nDone!")
 
 
