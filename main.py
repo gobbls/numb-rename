@@ -2,76 +2,148 @@
 
 
 import os
+import re
+import itertools
+import mimetypes
 from sys import argv
 
 
 TARGET = argv[1]
 
 
-def get_new_name(name: str, num: int, longest_num: int) -> str:
+def normalize_file_name(path: str, name: str, file_amount: int) -> str:
     '''
-    Takes a filename (the entire path) and simplifies
-    it to a unique number as well as making the entire
-    name (the remaining extension that is...) lower-case.
+    Renames a file in a given path by;
+    prefixing zeroes to the new given `name` to match the amount
+    of files is the path (using `longest_num`) and lowercases the extension.
 
     Args:
-        `name` (str): The old filename (full path).
-        `num` (int): The number used as the filename.
+        path (str): The target filepath.
+        name (str): The new filename.
+        file_amount (int): The amount of files in a directory.
 
     Returns:
-        `str`: The new name as a full path, with the extension lower'cased.
+        str: The new name as a full path, with the extension lower'cased.
+
+    Raises:
+        ValueError: If the given name arg does not contain an extension.
     '''
 
-    if '.' not in name:
-        raise ValueError(f'[ERROR] {name} does not contain an exstension!')
+    if '.' not in path:
+        raise ValueError(f'[!!] {path} does not contain an exstension!')
 
-    parent = os.path.dirname(name)
-    extension = name.split('.')[-1].lower()
-    new_name = str(num)
-    prefix = "0" * (longest_num - len(new_name))
-    new_full_name = os.path.join(parent, f'{prefix}{new_name}.{extension}')
+    parent = os.path.dirname(path)
+    extension = path.split('.')[-1].lower()
+    prefix = "0" * (file_amount - len(name))
+    new_name_path = os.path.join(parent, f'{prefix}{name}.{extension}')
 
-    return new_full_name
+    return new_name_path
+
+
+def sort_numbered_and_non_number_path_name_prefixes(paths: [str]) -> [str]:
+    '''
+    Takes a list of strings and sorts them based on their numbered prefix (numerically),
+    then the strings that lacks a numbered prefix (alphanumerically).
+
+    Args:
+        paths ([list]): The list of paths you want to sort.
+
+    Returns:
+        [str]: The given list sorted numerically.
+    '''
+
+    numbered_prefix = []
+    non_numbered_prefix = []
+
+    for path in paths:
+        name = os.path.basename(path)
+
+        res = re.findall(r'\d+', name)
+        if res == []:
+            non_numbered_prefix.append(path)
+        else:
+            numbered_prefix.append(path)
+
+    numbered_prefix = sorted(
+            numbered_prefix,
+            key=lambda path: int(re.findall(r'\d+', os.path.basename(path))[0]))
+
+    non_numbered_prefix = sorted(non_numbered_prefix)
+
+    _sorted = list(itertools.chain(numbered_prefix, non_numbered_prefix))
+
+    return _sorted
+
+
+def filter_non_media_files(paths: [str]) -> [str]:
+    '''
+    Returns a list of filepaths where the file is determined
+    to be either an image or a video.
+
+    Args:
+        paths ([str]): The array of filepaths to check.
+
+    Returns:
+        [str]: The same array with non-media files removed.
+    '''
+
+    media_files = []
+
+    for p in paths:
+        if (not os.path.isfile(p)):
+            continue
+
+        mime_type, mime_encoding = mimetypes.guess_file_type(p)
+        media_type = mime_type.split("/")[0]
+
+        if (media_type == "image" or media_type == "video"):
+            media_files.append(p)
+
+    return media_files
 
 
 def recur(path: str) -> None:
-    # Append the found files to their parent path.
-    paths = [os.path.join(path, p) for p in os.listdir(path)]
+    print(f"[>] working with path: {path}")
 
-    # The longest number by literal characters.
-    longest_num = len(str(len(paths)))
+    unsorted_files = os.listdir(path)
 
-    if paths == []:
-        print(f'[WARNING] "{path}" is empty! Deleting...')
+    if unsorted_files == []:
+        print(f'[!] "{path}" is empty! Removing...')
         
         try:
             os.rmdir(path)
         except PermissionError as e:
-            raise PermissionError(f"[ERROR] You do not have permission to delete {path}! Got error:\n{e}")
+            raise PermissionError(f"[!!] You do not have permission to delete {path}! Got error:\n{e}")
         except:
-            raise Exception(f"[ERROR] Unknown error while removing {path}!")
+            raise Exception(f"[!!] Unknown error while removing {path}!")
 
         return
 
+    full_paths = [os.path.join(path, p) for p in unsorted_files]
+    dir_paths = [p for p in full_paths if os.path.isdir(p)]
+    filtered_files = filter_non_media_files(paths=full_paths)
+    sorted_paths = sort_numbered_and_non_number_path_name_prefixes(paths=filtered_files)
+    target_paths = list(itertools.chain(dir_paths, sorted_paths))
+    media_files_amount = len(str(len(target_paths)))
+
     iter = 1
 
-    for f_path in paths:
-        if os.path.isdir(f_path):
-            recur(f_path)
+    for path in target_paths:
+        if os.path.isdir(path):
+            recur(path)
 
-        elif os.path.isfile(f_path):
-            new_name = get_new_name(f_path, iter, longest_num)
+        elif os.path.isfile(path):
+            new_name = normalize_file_name(
+                    path=path,
+                    name=str(iter),
+                    file_amount=media_files_amount)
+
             iter += 1
 
-            if (new_name in paths):
-                print(f"[LOG] {new_name} already exists! Continuing without taking action...")
+            if (new_name in target_paths or path == new_name):
                 continue
 
-            if (f_path == new_name):
-                print(f"[LOG] {f_path} == {new_name} ignoring same name...")
-                continue
-
-            os.rename(f_path, new_name)
+            os.rename(path, new_name)
 
 
 def main() -> None:
