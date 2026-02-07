@@ -3,8 +3,17 @@
 
 #
 # KNOWN QUIRK:
-# - If a directory consists of a file named 01.jpg and 1.jpg,
-#   both will be ignored, and not renamed.
+#
+# If a directory consists of a file named 01.jpg and 1.jpg
+# due to a 1.jpg being moved to a already processed directory;
+#
+# 1.jpg will be ignored and not renamed due to the script
+# trying to rename 1.jpg to a file that already has the
+# name it is trying to take. This is by intention,
+# but this is a edgecase that should be fixed some way or another.
+#  
+# Perhaps move such files to the back of the que / list, giving it a
+# higher number-name that will not collide with other filenames.
 #
 
 
