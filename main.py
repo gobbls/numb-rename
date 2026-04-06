@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 
+#
+# TODO:
+# - Add ability to fill numbering-gaps by either picking files
+#   from the very end of the directory or progressivly move
+#   the entire tree "upwards" to close the gap
+#   (takes more time, but has its purpose)
+#
+# - Find all the files already normalized in a directory before starting,
+#   instead of checking if the file is normalized _during_ the operation.
+#
+
 
 from args import args
 
