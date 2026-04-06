@@ -1,41 +1,6 @@
 #!/usr/bin/env python3
 
 
-#
-# KNOWN QUIRK:
-#
-# If a directory consists of a file named 01.jpg and 1.jpg
-# due to a 1.jpg being moved to a already processed directory;
-#
-# 1.jpg will be ignored and not renamed due to the script
-# trying to rename 1.jpg to a file that already has the
-# name it is trying to take. This is by intention,
-# but this is a edgecase that should be fixed some way or another.
-#
-# Perhaps move such files to the back of the que / list, giving it a
-# higher number-name that will not collide with other filenames.
-#
-
-
-#
-# TODO:
-# 1. Fix _that_ ^^.
-# 2. Add some CL flags.
-#    - For adding / not adding zero-padding
-#      - Padding symbol (zero (0) as default)
-#    - Ability to "pre-check" all targets before running the process,
-#      to avoid conflicts during the process for bigger directories.
-#      Should not be default, since we already know the possible
-#      consequences along the way.
-#
-# 3. Support for multiple tartgets
-#    - And support for the counter to carry over to the next target, or not.
-#
-# 4. Some errors only affect a single directory, collect those errors and display
-#    them when the operation completes in stead of stopping the operation outright.
-#
-
-
 from args import args
 
 import os
@@ -44,83 +9,77 @@ import itertools
 import mimetypes
 
 
-def normalize_file_name(path: str, name: str, file_amount_num_literal: int) -> str:
+def normalize_file_name(path: str, new_name: str, name_len: int) -> str:
     """
-    Renames a file in a given path by;
-    prefixing zeroes to the new given `name` to match the amount
-    of files is the path (using `longest_num`) and lowercases the extension.
+    Normalizes a given name by adding matching length of character-
+    padding (if enabled by flag) and lowercase the extension.
 
     Args:
         path (str): The target filepath.
-        name (str): The new filename.
-        file_amount (int): The amount of files in the directory the target belongs.
+        new_name (str): The new filename.
+        name_len (int): The wanted length of the new name, used for padding.
 
     Returns:
-        str: The new name as a full path, with the extension lower'cased.
-
-    Raises:
-        ValueError: If the given name arg does not contain an extension.
+        str: The new name as a full path.
     """
 
-    if "." not in path:
-        raise ValueError(f"[!!] {path} does not contain an exstension!")
-
     # fmt: off
-    parent =            os.path.dirname(path)
-    extension =         path.split(".")[-1].lower()
-    padding =           args.padding * (file_amount_num_literal - len(name))
-    new_name =          f"{padding}{name}.{extension}"
-    new_name_path =     os.path.join(parent, new_name)
+    name =      os.path.basename(path)
+    padding =   "0" * (name_len - len(new_name)) if args.padding else ""
+    ext =       "." + name.split(".")[-1].lower() if "." in name else ""
+    nname =     padding + new_name + ext
+    parent =    os.path.dirname(path)
+    nnamep =    os.path.join(parent, nname)
     # fmt: on
 
-    return new_name_path
+    return nnamep
 
 
-def check_already_normalized(path: str, file_amount: int) -> int | None:
+def check_already_normalized(path: str, amount: int) -> bool:
     """
     Check if a file is already normalized, to avoid colliding with it or
     unecessarily normalize it.
 
     Args:
         path (str): The target filepath.
-        file_amount (int): The amount of files in the directory the target belongs.
+        amount (int): The amount of files in the directory the target belongs.
 
     Returns:
-        int: The filenumber, if the file is already normalized.
-        None: If the file was not previously normalized.
+        bool: If the file has been normalized or not.
     """
 
+    amount_len = len(str(amount))
     name = os.path.basename(path)
+    wo_ext = name.rsplit(".", 1)[0]
 
-    if "." not in name:
-        return None
+    if not wo_ext.isnumeric():
+        return False
 
-    without_extension = name.rsplit(".", 1)[0]
+    if args.padding:
+        if len(wo_ext) != amount_len:
+            return False
 
-    if len(without_extension) != len(str(file_amount)) or name.isnumeric() is False:
-        return None
+        pad_size = 0
 
-    pad_size = 0
+        try:
+            p = r"^(0+?)\1*"
+            m = re.match(p, wo_ext)
+            pad_size = len(m.group(0))
+        except AttributeError:
+            pass
 
-    try:
-        p = rf"^({re.escape(args.padding)}+?)\1*"
-        m = re.match(p, without_extension)
-        pad_size = int(m.group(0))
-    except AttributeError:
-        pass
+        file_num = int(wo_ext[pad_size:])
 
-    file_number = int(without_extension[pad_size:])
+        return file_num <= amount
 
-    if file_number <= file_amount:
-        return file_number
     else:
-        return None
+        return wo_ext[0] != "0" and int(wo_ext) <= amount
 
 
-def sort_numbered_and_non_number_path_name_prefixes(paths: [str]) -> [str]:
+def sort_paths_by_numbered_prefix(paths: [str]) -> [str]:
     """
     Takes a list of strings and sorts them based on their numbered prefix (numerically),
-    then the strings that lacks a numbered prefix (alphanumerically).
+    then the strings that lacks a numbered prefix; by their letter (alphanumerically).
 
     Args:
         paths ([list]): The list of paths you want to sort.
@@ -134,12 +93,8 @@ def sort_numbered_and_non_number_path_name_prefixes(paths: [str]) -> [str]:
 
     for path in paths:
         name = os.path.basename(path)
-
         res = re.findall(r"\d+", name)
-        if res == []:
-            non_numbered_prefix.append(path)
-        else:
-            numbered_prefix.append(path)
+        non_numbered_prefix.append(path) if not res else numbered_prefix.append(path)
 
     numbered_prefix = sorted(
         numbered_prefix,
@@ -155,13 +110,12 @@ def sort_numbered_and_non_number_path_name_prefixes(paths: [str]) -> [str]:
 
 def filter_non_media_files(paths: [str]) -> [str]:
     """
-    Returns a list of filepaths where the file is determined
-    to be either an image or a video.
+    Return the given list, keeping only the media files (image or video).
 
-    This filtering is based on the files MIME type.
+    This filtering is based on the files' MIME type.
 
     Args:
-        paths ([str]): The array of filepaths to check.
+        paths ([str]): The list of filepaths to check.
 
     Returns:
         [str]: The same array with non-media files removed.
@@ -182,81 +136,73 @@ def filter_non_media_files(paths: [str]) -> [str]:
     return media_files
 
 
-#
-# TODO:
-# Add option to remove empty directories the process encounters along the way.
-#
 def remove_empty_dir(path: str) -> None:
+    print(f'[!] "{path}" is empty, removing...')
+
     try:
         os.rmdir(path)
     except PermissionError as e:
-        raise PermissionError(
-            f"[!!] You do not have permission to delete {path}! Got error:\n{e}"
+        print(
+            f"[!!] You do not have permission to remove {path}!"
+            + f"Got error:\n\n{e}\n\nContinuing as normal..."
         )
     except:  # noqa
-        raise Exception(f"[!!] Unknown error while removing {path}!")
+        print(f"[!!] Unknown error while removing {path}! Continuing as normal...")
 
 
-def recur(path: str) -> None:
-    print(f"[>] working with path: {path}")
+def recur(path: str, iteration: int = 1) -> None:
+    print(f"[>] working on: {path}")
 
     unprocessed_files = os.listdir(path)
 
-    if unprocessed_files == []:
-        print(f'[!] "{path}" is empty! Removing...')
-        return remove_empty_dir(path)
+    if not unprocessed_files:
+        return remove_empty_dir(path) if args.delete_empty_dir else None
 
     # fmt: off
-    full_paths =                [os.path.join(path, p) for p in unprocessed_files]
-    used_names =                [n.rsplit('.', maxsplit=1)[0] for n in full_paths]
-    dir_paths =                 [p for p in full_paths if os.path.isdir(p)]
-    media_files =               filter_non_media_files(paths=full_paths)
-    sorted_paths =              sort_numbered_and_non_number_path_name_prefixes(paths=media_files)
-    target_paths =              list(itertools.chain(dir_paths, sorted_paths))
-    media_files_num_literal =   len(str(len(target_paths)))
+    full_paths =    [os.path.join(path, n) for n in unprocessed_files]
+    used_names =    [n.rsplit('.', 1)[0] for n in unprocessed_files]
+    dir_paths =     [p for p in full_paths if os.path.isdir(p)]
+    media_files =   filter_non_media_files(paths=full_paths)
+    sorted_paths =  sort_paths_by_numbered_prefix(media_files)
+    len_literal =   len(str(len(media_files)))
     # fmt: on
 
-    already_normalized = []
+    _iter = iteration if args.carry_over else 1
 
-    iter = 1
+    for file in sorted_paths:
+        name = os.path.basename(file).rsplit(".", 1)[0]
+        is_normalized = check_already_normalized(file, len(media_files))
+        name_is_unique = used_names.count(name) == 1
 
-    for path in target_paths:
-        if os.path.isdir(path):
-            recur(path)
-        else:
-            normalized = check_already_normalized(path, file_amount=len(target_paths))
+        if is_normalized and name_is_unique:
+            continue
 
-            #
-            # May already be normalized, but can confilict if there are
-            # files with same name, but different extension. Handled
-            # by checking if the name appears more than once in the dir.
-            #
-            name_is_unique = len([(n == normalized) for n in used_names]) == 1
-
-            if normalized is not None and name_is_unique:
-                already_normalized.append(normalized)
-                continue
-
+        while True:
             new_name = normalize_file_name(
-                path=path,
-                name=str(iter),
-                file_amount_num_literal=media_files_num_literal,
+                path=file,
+                new_name=str(_iter),
+                name_len=len_literal,
             )
+            _new_name = os.path.basename(new_name).rsplit(".")[0]
 
-            #
-            # This is already checked by checking if the name is already
-            # in use above, so perhaps this shouldn't be needed?
-            #
-            if new_name in target_paths:
-                continue
+            _iter += 1
 
-            os.rename(path, new_name)
+            if _new_name not in used_names:
+                used_names.append(_new_name)
+                break
 
-            iter += 1
+        print(f"[D] Renaming {file} ==> {new_name}")
+        os.rename(file, new_name)
+
+    if args.recursive:
+        for dir in dir_paths:
+            recur(dir, iteration=_iter)
 
 
 def main() -> None:
-    recur(TARGET)
+    for t in args.targets:
+        recur(t)
+
     print("\nDone!")
 
 
