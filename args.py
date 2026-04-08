@@ -10,7 +10,7 @@ _parser = argparse.ArgumentParser(
 _parser.add_argument("targets", nargs="+")
 
 _parser.add_argument(
-    "-p", "--padding", help="Add (zero)-padding to the filenames.", action="store_true"
+    "-p", "--padding", help="Add zero-padding to the filenames.", action="store_true"
 )
 
 _parser.add_argument(
@@ -23,7 +23,7 @@ _parser.add_argument(
 _parser.add_argument(
     "-d",
     "--delete-empty-dir",
-    help="Delete empty directories we stumble uppon during runtime.",
+    help="Delete empty directories we stumble upon (-r Required).",
     action="store_true",
 )
 
@@ -34,6 +34,7 @@ _parser.add_argument(
 )
 
 _parser.add_argument(
+    "-c",
     "--carry-over",
     help="Let the file-numeration carry over to the next directory, instead of resetting to zero.",
     action="store_true",
