@@ -20,6 +20,28 @@ import itertools
 import mimetypes
 
 
+def add_padding(string: str, length: int, padding_char: str = "0") -> str:
+    """
+    Adds padding to the left of a given string to fit a wanted length.
+
+    Args:
+        string (str): The string you want to add padding.
+        length (int): The length you want the string to be after padding is added.
+        padding_char (str): The character you want to use as padding [default = "0"].
+
+    Returns:
+        str: The given string; with padding.
+    """
+
+    # fmt: off
+    padding_amount  = length - len(string)
+    padding         = padding_char * padding_amount
+    _string         = padding + string
+    # fmt: on
+
+    return _string
+
+
 def normalize_file_name(path: str, new_name: str, name_len: int) -> str:
     """
     Normalizes a given name by adding matching length of character-
@@ -178,6 +200,11 @@ def recur(path: str, iteration: int = 1) -> None:
     len_literal =   len(str(len(media_files)))
     # fmt: on
 
+    #
+    # TODO:
+    # Fix --carry-over currently not working due to matching with
+    # the amount of files in the file's directory.
+    #
     _iter = iteration if args.carry_over else 1
 
     for file in sorted_paths:
