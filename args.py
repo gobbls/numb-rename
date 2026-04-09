@@ -10,7 +10,21 @@ _parser = argparse.ArgumentParser(
 _parser.add_argument("targets", nargs="+")
 
 _parser.add_argument(
-    "-p", "--padding", help="Add zero-padding to the filenames.", action="store_true"
+    "--disable-padding",
+    help="Add zero('0')-padding to the filenames to align the names with the amount.",
+    action="store_false",
+)
+
+_parser.add_argument(
+    "--disable-media-only",
+    help="Include all files (not directories) in a directory, not only the media files.",
+    action="store_false",
+)
+
+_parser.add_argument(
+    "--carry-over",
+    help="Let the file-numeration carry over to the next directory, instead of resetting to zero.",
+    action="store_true",
 )
 
 _parser.add_argument(
@@ -24,19 +38,6 @@ _parser.add_argument(
     "-d",
     "--delete-empty-dir",
     help="Delete empty directories we stumble upon (-r Required).",
-    action="store_true",
-)
-
-_parser.add_argument(
-    "--pre-check",
-    help="Check if the renaming process will go as planned before running the process. Usefull for large directories.",
-    action="store_true",
-)
-
-_parser.add_argument(
-    "-c",
-    "--carry-over",
-    help="Let the file-numeration carry over to the next directory, instead of resetting to zero.",
     action="store_true",
 )
 
